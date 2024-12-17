@@ -135,12 +135,12 @@ void read_acc()
 
 void read_gyro()
 {
-    // Sensitivity scale factor - 65.5 LSB per deg per sec
+    // Sensitivity scale factor => 65.5 LSB per deg
     Wire.beginTransmission(mpu_addr);
     Wire.write(0x1B);
     Wire.write(0x8);
     Wire.endTransmission();
-    // Read accelerometer data
+    // Read gyroscope data
     Wire.beginTransmission(mpu_addr);
     Wire.write(0x43);
     Wire.endTransmission();
