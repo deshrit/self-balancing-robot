@@ -1,7 +1,7 @@
 #include <Wire.h>
 
 // MPU6050
-const uint8_t mpu_addr = 0x68;
+const uint8_t MPU_ADDR = 0x68;
 
 // L298N
 const uint8_t en1 = 33;
@@ -12,14 +12,22 @@ const uint8_t in4 = 14;
 const uint8_t en2 = 12;
 bool forward = true;
 
-// Data
-float gyro_x, gyro_y, gyro_z, acc_x, acc_y, acc_z, acc_total, angle_roll, angle_pitch;
+// Accel data
+int16_t acc_x_LSB, acc_y_LSB, acc_z_LSB;
+float acc_x, acc_y, acc_z, acc_total, acc_angle_pitch, acc_angle_roll;
 
+// Gyro data
+int16_t gyro_x_LSB, gyro_y_LSB, gyro_z_LSB;
+float gyro_x, gyro_y, gyro_z, gyro_angle_roll, gyro_angle_pitch;
+
+// General
+float angle_pitch, angle_roll;
+bool set_starting_gyro_angle = true, set_starting_angles = true;
 unsigned long loop_timer;
 
 // PID values and constants
 float setpoint = 0.0;
-unsigned int kp = 40, ki = 0, kd = 0;
+unsigned int kp = 25, ki = 0, kd = 10;
 float error, prev_error;
 float pid_p, pid_i, pid_d, pid_total;
 
@@ -41,43 +49,54 @@ void setup()
     Wire.begin();
     delay(250);
 
-    // Start gyro in power mode
-    Wire.beginTransmission(mpu_addr);
-    Wire.write(0x6B);
-    Wire.write(0x00);
-    Wire.endTransmission(true);
+    configure_MPU6050_registers();
 
-    // Set low pass filter for both gyro and acc
-    Wire.beginTransmission(mpu_addr);
-    Wire.write(0x1A);
-    Wire.write(0x05);
-    Wire.endTransmission();
+    // get_gyro_calibration_offset();
 
     loop_timer = micros();
 }
 
 void loop()
 {
-    get_current_inclination();
+    process_MPU6050_data();
 
     error = setpoint - angle_pitch;
 
-    Serial.print("Angle roll: ");
-    Serial.print(angle_roll);
-    Serial.print("\tAngle pitch: ");
-    Serial.print(angle_pitch);
-
+    // P value
     pid_p = kp * error;
 
-    if (angle_pitch > -5 && angle_pitch < 5)
+    // I value
+    if (angle_pitch > -5.0 && angle_pitch < 5.0)
         pid_i = pid_i + ki * error;
     else
         pid_i = 0;
 
+    // D value
     pid_d = kd * (prev_error - error);
     prev_error = error;
 
+    // PID total
     pid_total = pid_p + pid_i + pid_d;
+
+    Serial.print(angle_pitch);
+    Serial.print(" ");
+    Serial.print(angle_roll);
+    Serial.print(" ");
+    Serial.print(error);
+    Serial.print(" ");
+    Serial.print(pid_p);
+    Serial.print(" ");
+    Serial.println(pid_total);
+
+    // Clamp PID value to maximum motor speed
+    if (pid_total > 255.0)
+        pid_total = 255.0;
+    if (pid_total < -255.0)
+        pid_total = -255.0;
+
+    // Fall safety
+    if (angle_pitch > 30.0 || angle_pitch < -30.0 || angle_roll > 15.0 || angle_roll < -15.0)
+        pid_total = 0;
 
     if (pid_total < 0)
     {
@@ -94,94 +113,169 @@ void loop()
         move_motors(forward, 0);
     }
 
-    Serial.print("\terror: ");
-    Serial.print(error);
-    Serial.print("\tpid_p: ");
-    Serial.print(pid_p);
-    Serial.print("\tpid_i: ");
-    Serial.print(pid_i);
-    Serial.print("\tpid_d: ");
-    Serial.print(pid_d);
-    Serial.print("\tpid_total: ");
-    Serial.println(pid_total);
-
-    // wait before continuing the loop to make 250Hz
+    // Delay to make 250Hz main loop
     while (micros() - loop_timer < 4000)
         ;
     loop_timer = micros();
 }
 
-void read_acc()
-{
-    // Configure accelerometer output => +-8g
-    Wire.beginTransmission(mpu_addr);
-    Wire.write(0x1C);
-    Wire.write(0x10);
-    Wire.endTransmission();
-
-    // Read accelerometer data
-    Wire.beginTransmission(mpu_addr);
-    Wire.write(0x3B);
-    Wire.endTransmission();
-    Wire.requestFrom(mpu_addr, 6);
-    int16_t acc_x_LSB = Wire.read() << 8 | Wire.read();
-    int16_t acc_y_LSB = Wire.read() << 8 | Wire.read();
-    int16_t acc_z_LSB = Wire.read() << 8 | Wire.read();
-    // LSB to g
-    acc_x = (float)acc_x_LSB / 4096;
-    acc_y = (float)acc_y_LSB / 4096;
-    acc_z = (float)acc_z_LSB / 4096;
-}
-
 void read_gyro()
 {
-    // Sensitivity scale factor => 65.5 LSB per deg
-    Wire.beginTransmission(mpu_addr);
-    Wire.write(0x1B);
-    Wire.write(0x8);
-    Wire.endTransmission();
-    // Read gyroscope data
-    Wire.beginTransmission(mpu_addr);
+    // Read accelerometer data
+    Wire.beginTransmission(MPU_ADDR);
     Wire.write(0x43);
     Wire.endTransmission();
-    Wire.requestFrom(mpu_addr, 6);
-    int16_t gyro_x_LSB = Wire.read() << 8 | Wire.read();
-    int16_t gyro_y_LSB = Wire.read() << 8 | Wire.read();
-    int16_t gyro_z_LSB = Wire.read() << 8 | Wire.read();
+    Wire.requestFrom(MPU_ADDR, 6);
+    gyro_x_LSB = Wire.read() << 8 | Wire.read();
+    gyro_y_LSB = Wire.read() << 8 | Wire.read();
+    gyro_z_LSB = Wire.read() << 8 | Wire.read();
+
+    // Calibrated offset
+    gyro_x_LSB -= -59;
+    gyro_y_LSB -= 46;
+    gyro_z_LSB -= 89;
+
+    // Angular velocity around respective axes in deg/s
+    gyro_x = gyro_x_LSB / 65.5;
+    gyro_y = gyro_y_LSB / 65.5;
+    gyro_z = gyro_z_LSB / 65.5;
 }
 
-void read_MPU6050_data()
+void read_acc()
 {
-    read_acc();
+    // Read accelerometer data
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x3B);
+    Wire.endTransmission();
+    Wire.requestFrom(MPU_ADDR, 6);
+    acc_x_LSB = Wire.read() << 8 | Wire.read();
+    acc_y_LSB = Wire.read() << 8 | Wire.read();
+    acc_z_LSB = Wire.read() << 8 | Wire.read();
+    // Linear acceleration in respective axes in g
+    acc_x = acc_x_LSB / 8192.0;
+    acc_y = acc_y_LSB / 8192.0;
+    acc_z = acc_z_LSB / 8192.0;
+}
+
+void process_MPU6050_data()
+{
     read_gyro();
+    read_acc();
+    // Gyro angle integration for 250 Hz loop
+    gyro_angle_pitch += gyro_y * 0.004;
+    gyro_angle_roll += gyro_x * 0.004;
+
+    // Yawed transfer the roll angle to the pitch angle
+    gyro_angle_pitch += gyro_angle_roll * sin(gyro_z * 0.000000698);
+    // Yawed transfer the pitch angle to the roll angle
+    gyro_angle_roll -= gyro_angle_pitch * sin(gyro_z * 0.000000698);
+
+    // Acc angle
+    acc_total = sqrt((acc_x * acc_x) + (acc_y * acc_y) + (acc_z * acc_z));
+    acc_angle_pitch = asin(-acc_x / acc_total) * (180 / 3.141592);
+    acc_angle_roll = asin(acc_y / acc_total) * (180 / 3.141592);
+
+    // Calibrated offset
+    acc_angle_pitch -= -2.33;
+    acc_angle_roll -= 0.6557;
+
+    if (set_starting_gyro_angle)
+    {
+        gyro_angle_pitch = acc_angle_pitch;
+        gyro_angle_roll = acc_angle_roll;
+        set_starting_gyro_angle = false;
+    }
+    else
+    {
+        // Gyro and acc angle combined
+        gyro_angle_pitch = gyro_angle_pitch * 0.9996 + acc_angle_pitch * 0.0004;
+        gyro_angle_roll = gyro_angle_roll * 0.9996 + acc_angle_roll * 0.0004;
+    }
+
+    if (set_starting_angles)
+    {
+        angle_pitch = gyro_angle_pitch;
+        angle_roll = gyro_angle_roll;
+        set_starting_angles = false;
+    }
+    else
+    {
+        // Final output with complementary filter
+        angle_pitch = angle_pitch * 0.9 + gyro_angle_pitch * 0.1;
+        angle_roll = angle_roll * 0.9 + gyro_angle_roll * 0.1;
+    }
 }
 
-void get_current_inclination()
+void move_motors(bool forward, uint8_t speed) // forward, left and right depends on motor driver and sensor placement
 {
-    read_MPU6050_data();
-    angle_roll = atan(acc_y / sqrt(acc_x * acc_x + acc_z * acc_z)) * 57.323;
-    angle_pitch = -atan(acc_x / sqrt(acc_y * acc_y + acc_z * acc_z)) * 57.323;
-}
+    // Clip negligible PWM speed to 0
+    if (speed < 20)
+        speed = 0;
 
-void move_motors(bool forward, uint8_t speed)
-{
-    // speed
+    // Write Speed
     analogWrite(en1, speed);
     analogWrite(en2, speed);
     if (forward)
     {
-        // motor1 dir
+        // motor right
         digitalWrite(in1, LOW);
         digitalWrite(in2, HIGH);
-        // motor2 dir
+        // motor left
         digitalWrite(in3, HIGH);
         digitalWrite(in4, LOW);
         return;
     }
-    // motor1 dir
+    // motor right
     digitalWrite(in1, HIGH);
     digitalWrite(in2, LOW);
-    // motor2 dir
+    // motor left
     digitalWrite(in3, LOW);
     digitalWrite(in4, HIGH);
+}
+
+void configure_MPU6050_registers()
+{
+    // Start MPU6050 in power mode
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x6B); // PWR_MGMT_1 register
+    Wire.write(0x8);  // disable temp sensor and wake all other sensors
+    Wire.endTransmission(true);
+
+    // Configure gyroscope output range
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x1B); // GYRO_CONFIG register
+    Wire.write(0x8);  // +-500 deg/s, should output 65.5 LSB for 1 deg/s
+    Wire.endTransmission();
+
+    // Configure accelerometer output range
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x1C); // ACCEL_CONFIG register
+    Wire.write(0x8);  // +-4g, should output 8192 LSB for 1g according to dataset
+    Wire.endTransmission();
+}
+
+void get_gyro_calibration_offset()
+{
+    long gyro_cal_x_LSB = 0, gyro_cal_y_LSB = 0, gyro_cal_z_LSB = 0;
+    Serial.print("\nCalibrating gyro.");
+    for (int i = 0; i < 2000; i++)
+    {
+        read_gyro();
+        if (i % 100 == 0)
+        {
+            Serial.print(".");
+        }
+        gyro_cal_x_LSB += gyro_x_LSB;
+        gyro_cal_y_LSB += gyro_y_LSB;
+        gyro_cal_z_LSB += gyro_z_LSB;
+    }
+    gyro_cal_x_LSB /= 2000;
+    gyro_cal_y_LSB /= 2000;
+    gyro_cal_z_LSB /= 2000;
+    Serial.print("\ngryo_cal_x_LSB: ");
+    Serial.print(gyro_cal_x_LSB);
+    Serial.print("\tgryo_cal_y_LSB: ");
+    Serial.print(gyro_cal_y_LSB);
+    Serial.print("\tgryo_cal_z_LSB: ");
+    Serial.print(gyro_cal_z_LSB);
 }
