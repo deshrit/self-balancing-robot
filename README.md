@@ -1,4 +1,5 @@
 # self-balancing-robot
 A PID control self balancing robot using esp32 and mpu6050.
 
-![img1](https://github.com/user-attachments/assets/0c0e6034-0e2c-4c2e-833e-5c26d2dec005)
+![bot2](https://github.com/user-attachments/assets/9e0f22b0-8664-4494-93cf-0a4ba1b20ca6)
+
