@@ -121,7 +121,7 @@ void loop()
 
 void read_gyro()
 {
-    // Read accelerometer data
+    // Read gyroscope data
     Wire.beginTransmission(MPU_ADDR);
     Wire.write(0x43);
     Wire.endTransmission();
