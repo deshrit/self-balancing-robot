@@ -1,0 +1,407 @@
+#pragma once
+
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <ArduinoJson.h>
+
+#include "MPU6050.hpp"
+
+#define WIFI_NETWORK "PROLiNK_PRN3009_A7A5"
+#define WIFI_PASSWORD "prolink12345"
+#define WIFI_TIMEOUT_MS 20000 /* 20 seconds */
+
+/* Global variables for API */
+extern float kp, ki, kd;
+extern MPU6050 sensor;
+
+static const char *htmlContent PROGMEM = R"***(
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Self Balancing Robot</title>
+    <!-- Bootstrap CDN -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
+      crossorigin="anonymous"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+      crossorigin="anonymous"
+    ></script>
+    <!-- Chart.js CDN -->
+    <script
+      type="text/javascript"
+      src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.js"
+    ></script>
+
+    <style>
+      body {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="PID-loading" class="spinner-border text-primary m-0.5"></div>
+    <div
+      style="visibility: hidden;"
+      id="container"
+      class="d-flex justify-content-center align-items-center flex-column w-80 h-100"
+    >
+      <div class="d-flex justify-content-center m-4">
+        <div class="card mx-2">
+          <div id="kp-header" class="card-header">
+            Proportional Constant (kp)
+            <div
+              id="kp-loading"
+              class="spinner-border text-primary spinner-border-sm"
+              style="visibility: hidden;"
+            ></div>
+          </div>
+          <div class="card-body">
+            <input
+              id="kp-range"
+              type="range"
+              class="form-range"
+              value="0"
+              min="-100"
+              max="100"
+              disabled
+            />
+            <span id="kp-span">0</span>
+          </div>
+          <div class="card-footer">
+            <button
+              onclick="updateConstant('kp',-0.5)"
+              class="btn btn-outline-primary"
+            >
+              -0.5
+            </button>
+            <button
+              onclick="updateConstant('kp',-0.2)"
+              class="btn btn-outline-primary"
+            >
+              -0.2
+            </button>
+            <button
+              onclick="updateConstant('kp',0.2)"
+              class="btn btn-outline-primary"
+            >
+              +0.2
+            </button>
+            <button
+              onclick="updateConstant('kp',0.5)"
+              class="btn btn-outline-primary"
+            >
+              +0.5
+            </button>
+          </div>
+        </div>
+
+        <div class="card mx-2">
+          <div id="ki-header" class="card-header">
+            Integral Constant (ki)
+            <div
+              id="ki-loading"
+              class="spinner-border text-primary spinner-border-sm"
+              style="visibility: hidden;"
+            ></div>
+          </div>
+          <div class="card-body">
+            <input
+              id="ki-range"
+              type="range"
+              class="form-range"
+              value="0"
+              min="-100"
+              max="100"
+              disabled
+            />
+            <span id="ki-span">0</span>
+          </div>
+          <div class="card-footer">
+            <button
+              onclick="updateConstant('ki',-0.5)"
+              class="btn btn-outline-primary"
+            >
+              -0.5
+            </button>
+            <button
+              onclick="updateConstant('ki',-0.2)"
+              class="btn btn-outline-primary"
+            >
+              -0.2
+            </button>
+            <button
+              onclick="updateConstant('ki',0.2)"
+              class="btn btn-outline-primary"
+            >
+              +0.2
+            </button>
+            <button
+              onclick="updateConstant('ki',0.5)"
+              class="btn btn-outline-primary"
+            >
+              +0.5
+            </button>
+          </div>
+        </div>
+
+        <div class="card mx-2">
+          <div id="kd-header" class="card-header">
+            Derivative Constant (kd)
+            <div
+              id="kd-loading"
+              class="spinner-border text-primary spinner-border-sm"
+              style="visibility: hidden;"
+            ></div>
+          </div>
+          <div class="card-body">
+            <input
+              id="kd-range"
+              type="range"
+              class="form-range"
+              value="0"
+              min="-100"
+              max="100"
+              disabled
+            />
+            <span id="kd-span">0</span>
+          </div>
+          <div class="card-footer">
+            <button
+              onclick="updateConstant('kd',-0.5)"
+              class="btn btn-outline-primary"
+            >
+              -0.5
+            </button>
+            <button
+              onclick="updateConstant('kd',-0.2)"
+              class="btn btn-outline-primary"
+            >
+              -0.2
+            </button>
+            <button
+              onclick="updateConstant('kd',0.2)"
+              class="btn btn-outline-primary"
+            >
+              +0.2
+            </button>
+            <button
+              onclick="updateConstant('kd',0.5)"
+              class="btn btn-outline-primary"
+            >
+              +0.5
+            </button>
+          </div>
+        </div>
+      </div>
+      <canvas id="angles" class="my-4"></canvas>
+    </div>
+  </body>
+
+  <script>
+    /* PID html attributes */
+    const kpRange = document.getElementById("kp-range");
+    const kpSpan = document.getElementById("kp-span");
+
+    const kiRange = document.getElementById("ki-range");
+    const kiSpan = document.getElementById("ki-span");
+
+    const kdRange = document.getElementById("kd-range");
+    const kdSpan = document.getElementById("kd-span");
+  </script>
+
+  <!-- Get PID -->
+  <script>
+    const PIDLoading = document.getElementById("PID-loading");
+    const container = document.getElementById("container");
+    const GET_PID_CONSTANTS_URL = new URL(`${window.location.origin}/api/getPIDConstants`);
+    // const GET_PID_CONSTANTS_URL = `http://192.168.123.14/api/getPIDConstants`;
+
+    async function getPIDconstants() {
+      const res = await fetch(GET_PID_CONSTANTS_URL);
+      PIDLoading.style.visibility = "hidden";
+      container.style.visibility = "visible";
+      const data = await res.json();
+      if(data.kp) {
+        kpRange.value = data.kp;
+        kpSpan.innerText = data.kp;
+      };
+      if(data.ki) {
+        kiRange.value = data.ki;
+        kiSpan.innerText = data.ki;
+      }
+      if(data.kd) {
+        kdRange.value = data.kd;
+        kdSpan.innerText = data.kd;
+      }
+    }
+
+    window.addEventListener("load", () => getPIDconstants());
+  </script>
+
+  <!-- Update PID -->
+  <script>
+
+    const GET_UPDATE_PID_CONSTANTS_URL = `${window.location.origin}/api/updatePIDConstants`;
+    // const GET_UPDATE_PID_CONSTANTS_URL = `http://192.168.123.14/api/updatePIDConstants`;
+
+    const kpLoading = document.getElementById("kp-loading");
+    const kiLoading = document.getElementById("ki-loading");
+    const kdLoading = document.getElementById("kd-loading");
+
+    /* Update kp from buttons */
+    function updateConstant(k, val) {
+      let tmp;
+      if(k == "kp") {
+        tmp = (Number(kpSpan.innerText) + val).toFixed(2);
+        if(tmp > 100) tmp = 100;
+        if(tmp < -100) tmp = -100;
+        kpRange.value = tmp;
+        kpSpan.innerText = tmp;
+        }
+        if(k == "ki") {
+          tmp = (Number(kiSpan.innerText) + val).toFixed(2);
+          if(tmp > 100) tmp = 100;
+          if(tmp < -100) tmp = -100;
+          kiRange.value = tmp;
+          kiSpan.innerText = tmp;
+        }
+        if(k == "kd") {
+          tmp = (Number(kdSpan.innerText) + val).toFixed(2);
+          if(tmp > 100) tmp = 100;
+          if(tmp < -100) tmp = -100;
+          kdRange.value = tmp;
+          kdSpan.innerText = tmp;
+        }
+        syncPIDConstant({[k]: tmp});
+    }
+
+    /* Update PID constants in the server */
+    async function syncPIDConstant(params) {
+      const u = new URL(GET_UPDATE_PID_CONSTANTS_URL);
+      for(i in params) {
+        u.searchParams.append(i, params[i]);
+      }
+      if(params.kp) kpLoading.style.visibility = "visible";
+      if(params.ki) kiLoading.style.visibility = "visible";
+      if(params.kd) kdLoading.style.visibility = "visible";
+      const res = await fetch(u);
+      const resText = await res.text;
+      if(params.kp) kpLoading.style.visibility = "hidden";
+      if(params.ki) kiLoading.style.visibility = "hidden";
+      if(params.kd) kdLoading.style.visibility = "hidden";
+    }
+  </script>
+
+  <!-- Socket and Chart -->
+  <script>
+    const SOCKET_URL = new URL(`ws://${window.location.host}/ws`);
+    // const SOCKET_URL = new URL("ws://192.168.123.12/ws");
+    let socket;
+    function init() {
+      socket = new WebSocket(SOCKET_URL);
+      socket.onopen = (e) => {
+        console.log("Web socket connection established");
+      }
+      socket.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const time = new Date().toLocaleTimeString();
+
+        // Keep chart to last 100 points
+        if (chart.data.labels.length > 100) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
+          chart.data.datasets[1].data.shift();
+          chart.update();
+          return;
+        }
+
+        chart.data.labels.push(time);
+        chart.data.datasets[0].data.push(data.angle_pitch);
+        chart.data.datasets[1].data.push(data.angle_roll);
+
+        chart.update();
+      }
+      socket.onclose = (e) => {
+        console.log("Web socket connection closed");
+      }
+      socket.error = (e) => {
+        console.error("Error establishing web socket connection:", e);
+      }
+    }
+    window.onload = (e) => {
+      init();
+    };
+
+    const chart = new Chart("angles", {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Pitch Angle",
+            data: [],
+            borderColor: "red",
+            fill: false,
+          },
+          {
+            label: "Roll Angle",
+            data: [],
+            borderColor: "blue",
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        scales: {
+          x: {
+            title: { display: true, text: 'Time'}
+          },
+          y: {
+            title: {display: true, text: 'Angle (°)'},
+            suggestedMin: -90,
+            suggestedMax: 90
+          }
+        }
+      }
+    });
+  </script>
+</html>
+
+
+)***";
+static const size_t htmlContentLength = strlen_P(htmlContent);
+
+class RobotServer
+{
+private:
+  const uint16_t PORT;
+  AsyncWebServer server;
+  AsyncWebSocketMessageHandler wsHandler;
+  AsyncCorsMiddleware cors;
+
+  void setup_routes();
+  void setup_socket();
+public:
+  AsyncWebSocket ws;
+  RobotServer();
+  void connect_to_wifi();
+  void configure();
+
+  void send_data(JsonDocument& doc, String& json);
+};
