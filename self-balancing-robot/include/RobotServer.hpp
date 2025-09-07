@@ -83,28 +83,28 @@ static const char *htmlContent PROGMEM = R"***(
           </div>
           <div class="card-footer">
             <button
-              onclick="updateConstant('kp',-0.5)"
+              onclick="updateConstant('kp',-10)"
               class="btn btn-outline-primary"
             >
-              -0.5
+              -10
             </button>
             <button
-              onclick="updateConstant('kp',-0.2)"
+              onclick="updateConstant('kp',-5)"
               class="btn btn-outline-primary"
             >
-              -0.2
+              -5
             </button>
             <button
-              onclick="updateConstant('kp',0.2)"
+              onclick="updateConstant('kp',5)"
               class="btn btn-outline-primary"
             >
-              +0.2
+              +5
             </button>
             <button
-              onclick="updateConstant('kp',0.5)"
+              onclick="updateConstant('kp',10)"
               class="btn btn-outline-primary"
             >
-              +0.5
+              +10
             </button>
           </div>
         </div>
@@ -132,28 +132,28 @@ static const char *htmlContent PROGMEM = R"***(
           </div>
           <div class="card-footer">
             <button
-              onclick="updateConstant('ki',-0.5)"
+              onclick="updateConstant('ki',-10)"
               class="btn btn-outline-primary"
             >
-              -0.5
+              -10
             </button>
             <button
-              onclick="updateConstant('ki',-0.2)"
+              onclick="updateConstant('ki',-5)"
               class="btn btn-outline-primary"
             >
-              -0.2
+              -5
             </button>
             <button
-              onclick="updateConstant('ki',0.2)"
+              onclick="updateConstant('ki',5)"
               class="btn btn-outline-primary"
             >
-              +0.2
+              +5
             </button>
             <button
-              onclick="updateConstant('ki',0.5)"
+              onclick="updateConstant('ki',10)"
               class="btn btn-outline-primary"
             >
-              +0.5
+              +10
             </button>
           </div>
         </div>
@@ -181,28 +181,28 @@ static const char *htmlContent PROGMEM = R"***(
           </div>
           <div class="card-footer">
             <button
-              onclick="updateConstant('kd',-0.5)"
+              onclick="updateConstant('kd',-10)"
               class="btn btn-outline-primary"
             >
-              -0.5
+              -10
             </button>
             <button
-              onclick="updateConstant('kd',-0.2)"
+              onclick="updateConstant('kd',-5)"
               class="btn btn-outline-primary"
             >
-              -0.2
+              -5
             </button>
             <button
-              onclick="updateConstant('kd',0.2)"
+              onclick="updateConstant('kd',5)"
               class="btn btn-outline-primary"
             >
-              +0.2
+              +5
             </button>
             <button
-              onclick="updateConstant('kd',0.5)"
+              onclick="updateConstant('kd',10)"
               class="btn btn-outline-primary"
             >
-              +0.5
+              +10
             </button>
           </div>
         </div>

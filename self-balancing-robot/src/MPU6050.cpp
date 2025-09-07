@@ -46,13 +46,12 @@ void MPU6050::read_gyro()
     /* 
     Calibrated offsets.
 
-    These Values are obtained after only running `get_gyro_calibration_offset` 
-    once in the `setup` function and nothing on the loop. To get these value 
-    the bot must be placed on flat surface without its wheels.
+    These Values are obtained after running `get_gyro_calibration_offset` 
+    in the `setup` function keeping the bot flat.
     */
-    gyro_x_LSB -= -59;
-    gyro_y_LSB -= 46;
-    gyro_z_LSB -= 89;
+    gyro_x_LSB += 85;
+    gyro_y_LSB -= 35;
+    gyro_z_LSB += 80;
 
     /* Angular velocity around respective axes in deg/s */
     gyro_x = gyro_x_LSB / 65.5;
@@ -63,7 +62,7 @@ void MPU6050::read_gyro()
 void MPU6050::get_gyro_calibration_offset()
 {
     long gyro_cal_x_LSB = 0, gyro_cal_y_LSB = 0, gyro_cal_z_LSB = 0;
-    Serial.print("\nCalibrating gyro");
+    Serial.print("\nTo calibrate gyro");
     for (int i = 0; i < 2000; i++)
     {
         read_gyro();
@@ -96,18 +95,55 @@ void MPU6050::read_acc()
     acc_x_LSB = Wire.read() << 8 | Wire.read();
     acc_y_LSB = Wire.read() << 8 | Wire.read();
     acc_z_LSB = Wire.read() << 8 | Wire.read();
+
+    /* 
+    Calibrated offsets.
+
+    These Values are obtained after running `get_gyro_calibration_offset` 
+    in the `setup` function keeping the bot flat.
+    */
+    acc_x_LSB -= 300;
+    acc_y_LSB -= 50;
+    acc_z_LSB += 600;
+
     /* Linear acceleration in respective axes in g */
     acc_x = acc_x_LSB / 8192.0;
     acc_y = acc_y_LSB / 8192.0;
     acc_z = acc_z_LSB / 8192.0;
 }
 
+void MPU6050::get_acc_calibration_offset()
+{
+    long acc_cal_x_LSB = 0, acc_cal_y_LSB = 0, acc_cal_z_LSB = 0;
+    Serial.print("\nTo calibrate acc");
+    for (int i = 0; i < 2000; i++)
+    {
+        read_acc();
+        if (i % 100 == 0)
+        {
+            Serial.print(".");
+        }
+        acc_cal_x_LSB += acc_x_LSB;
+        acc_cal_y_LSB += acc_y_LSB;
+        acc_cal_z_LSB += acc_z_LSB;
+    }
+    acc_cal_x_LSB /= 2000;
+    acc_cal_y_LSB /= 2000;
+    acc_cal_z_LSB /= 2000;
+    Serial.print("\nacc_cal_x_LSB: ");
+    Serial.print(acc_cal_x_LSB);
+    Serial.print("\tacc_cal_y_LSB: ");
+    Serial.print(acc_cal_y_LSB);
+    Serial.print("\tacc_cal_z_LSB: ");
+    Serial.print(acc_cal_z_LSB);
+}
 
 void MPU6050::process_MPU6050_data()
 {
     read_gyro();
     read_acc();
-    /* Gyro angle integration for 250 Hz loop */
+
+    /* Gyro angle integration for 100 Hz loop */
     gyro_angle_pitch += gyro_y * 0.004;
     gyro_angle_roll += gyro_x * 0.004;
 
@@ -121,33 +157,16 @@ void MPU6050::process_MPU6050_data()
     acc_angle_pitch = asin(-acc_x / acc_total) * (180 / 3.141592);
     acc_angle_roll = asin(acc_y / acc_total) * (180 / 3.141592);
 
-    /* Calibrated offset */
-    acc_angle_pitch -= -2.33;
-    acc_angle_roll -= 0.6557;
 
-    if (set_starting_gyro_angle)
-    {
-        gyro_angle_pitch = acc_angle_pitch;
-        gyro_angle_roll = acc_angle_roll;
-        set_starting_gyro_angle = false;
-    }
-    else
-    {
-        /* Gyro and acc angle combined */
-        gyro_angle_pitch = gyro_angle_pitch * 0.9996 + acc_angle_pitch * 0.0004;
-        gyro_angle_roll = gyro_angle_roll * 0.9996 + acc_angle_roll * 0.0004;
-    }
+    angle_pitch = 0.95 * gyro_angle_pitch + 0.05 * acc_angle_pitch;
+    angle_roll = 0.95 * gyro_angle_roll + 0.05 * acc_angle_roll;
 
-    if (set_starting_angles)
-    {
-        angle_pitch = gyro_angle_pitch;
-        angle_roll = gyro_angle_roll;
-        set_starting_angles = false;
-    }
-    else
-    {
-        /* Final output with complementary filter */
-        angle_pitch = angle_pitch * 0.9 + gyro_angle_pitch * 0.1;
-        angle_roll = angle_roll * 0.9 + gyro_angle_roll * 0.1;
-    }
+    gyro_angle_pitch = angle_pitch;
+    gyro_angle_roll = angle_roll;
+
+    // Serial.print("angle_pitch:");
+    // Serial.print(angle_pitch);
+    // Serial.print(",");
+    // Serial.print("angle_roll:");
+    // Serial.println(angle_roll);
 }

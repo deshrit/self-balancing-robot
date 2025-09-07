@@ -13,7 +13,6 @@ private:
     int16_t gyro_x_LSB, gyro_y_LSB, gyro_z_LSB;
     float gyro_x, gyro_y, gyro_z, gyro_angle_roll, gyro_angle_pitch;
 
-    bool set_starting_gyro_angle = true, set_starting_angles = true;
     const uint8_t MPU_ADDR;
 
     void read_gyro();
@@ -26,5 +25,6 @@ public:
 
     void configure();
     void get_gyro_calibration_offset();
+    void get_acc_calibration_offset();
     void process_MPU6050_data();
 };

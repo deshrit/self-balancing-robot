@@ -2,39 +2,41 @@
 
 #include "L298N.hpp"
 
-L298N::L298N():en1(33), in1(25), in2(26), en2(12), in3(27), in4(14), forward(true) {}
+L298N::L298N():EN1(33), IN1(25), IN2(26), EN2(12), IN3(27), IN4(14), forward(true), MAX_SPEED(200), RIGHT_MOTOR_CAL_OFFSET(18) {}
 
 void L298N::pin_mode() {
-    pinMode(en1, OUTPUT);
-    pinMode(in1, OUTPUT);
-    pinMode(in2, OUTPUT);
-    pinMode(in3, OUTPUT);
-    pinMode(in4, OUTPUT);
-    pinMode(en2, OUTPUT);
+    pinMode(EN1, OUTPUT);
+    pinMode(IN1, OUTPUT);
+    pinMode(IN2, OUTPUT);
+    pinMode(IN3, OUTPUT);
+    pinMode(IN4, OUTPUT);
+    pinMode(EN2, OUTPUT);
 }
 
-void L298N::move_motors(uint8_t speed) {
-    /* Clip negligible PWM speed to 0 */
-    if (speed < 20)
-        speed = 0;
+void L298N::move_motors(uint16_t speed = 0) {
 
-    /* Write Speed */
-    analogWrite(en1, speed);
-    analogWrite(en2, speed);
+    if(speed > MAX_SPEED) speed = MAX_SPEED;
+
+    Serial.print("\tspd:");
+    Serial.print(speed);
+    /* Motor right speed (assumed taking one side as forward reference of bot)*/
+    analogWrite(EN1, (speed > RIGHT_MOTOR_CAL_OFFSET && speed < MAX_SPEED - RIGHT_MOTOR_CAL_OFFSET) ? speed - RIGHT_MOTOR_CAL_OFFSET : speed); // Cheap motor offset
+    /* Motor left speed */
+    analogWrite(EN2, speed);
     if (forward)
     {
         /* Motor right */
-        digitalWrite(in1, LOW);
-        digitalWrite(in2, HIGH);
+        digitalWrite(IN1, LOW);
+        digitalWrite(IN2, HIGH);
         /* Motor left */
-        digitalWrite(in3, HIGH);
-        digitalWrite(in4, LOW);
+        digitalWrite(IN3, HIGH);
+        digitalWrite(IN4, LOW);
         return;
     }
     /* Motor right */
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
     /* Motor left */
-    digitalWrite(in3, LOW);
-    digitalWrite(in4, HIGH);
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
 }
